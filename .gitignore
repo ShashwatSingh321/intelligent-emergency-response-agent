@@ -28,3 +28,11 @@ Thumbs.db
 # Local databases
 *.db
 *.sqlite3
+
+
+# Local databases
+*.db
+*.sqlite3
+
+# Generated emergency reports
+data/emergency_reports.json
