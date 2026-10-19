@@ -86,3 +86,28 @@ def test_get_missing_report_returns_none(tmp_path):
     workflow = make_workflow(tmp_path)
 
     assert workflow.get_report("UNKNOWN") is None
+
+
+
+
+def test_unknown_campus_location_is_rejected(tmp_path):
+    workflow = make_workflow(tmp_path)
+    report = make_report()
+
+    # LIBRARY is valid; this location is not on the campus map.
+    report.location_id = "UNKNOWN_LOCATION"
+
+    with pytest.raises(ValueError, match="Unknown campus location"):
+        workflow.submit_report(report)
+
+
+def test_invalid_location_report_is_not_saved(tmp_path):
+    workflow = make_workflow(tmp_path)
+    report = make_report()
+
+    report.location_id = "UNKNOWN_LOCATION"
+
+    with pytest.raises(ValueError, match="Unknown campus location"):
+        workflow.submit_report(report)
+
+    assert workflow.get_report(report.id) is None

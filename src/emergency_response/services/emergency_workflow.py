@@ -12,7 +12,7 @@ from emergency_response.services.emergency_service import (
 
 
 class EmergencyWorkflow:
-    """Coordinate report persistence and preliminary processing."""
+    """Coordinate report validation, persistence, and processing."""
 
     def __init__(
         self,
@@ -29,9 +29,16 @@ class EmergencyWorkflow:
         report: EmergencyReport,
         required_equipment: set[str] | None = None,
     ) -> EmergencyProcessingResult:
-        """Save a new report, then produce a processing recommendation."""
+        """Validate, save, and process an emergency report."""
 
-        # Save first so duplicate IDs are rejected before processing.
+        # Reject reports for locations missing from the campus map.
+        if not self.graph.has_location(report.location_id):
+            raise ValueError(
+                f"Unknown campus location: {report.location_id}"
+            )
+
+        # Save only after location validation succeeds.
+        # Duplicate report IDs are still rejected by the repository.
         self.repository.save(report)
 
         return process_emergency(
