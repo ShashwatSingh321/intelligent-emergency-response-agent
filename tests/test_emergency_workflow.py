@@ -10,6 +10,7 @@ from emergency_response.models.ambulance import (
 )
 from emergency_response.models.emergency import (
     EmergencyReport,
+    EmergencyStatus,
     EmergencyType,
 )
 from emergency_response.routing.graph import CampusGraph
@@ -111,3 +112,49 @@ def test_invalid_location_report_is_not_saved(tmp_path):
         workflow.submit_report(report)
 
     assert workflow.get_report(report.id) is None
+
+
+
+
+def test_workflow_can_transition_report_status(tmp_path):
+    workflow = make_workflow(tmp_path)
+    report = make_report()
+
+    workflow.submit_report(report)
+
+    updated = workflow.transition_status(
+        report.id,
+        EmergencyStatus.UNDER_REVIEW,
+    )
+
+    assert updated.status == EmergencyStatus.UNDER_REVIEW
+    assert workflow.get_report(report.id).status == (
+        EmergencyStatus.UNDER_REVIEW
+    )
+
+
+def test_workflow_rejects_invalid_status_transition(tmp_path):
+    workflow = make_workflow(tmp_path)
+    report = make_report()
+
+    workflow.submit_report(report)
+
+    with pytest.raises(ValueError, match="Cannot transition"):
+        workflow.transition_status(
+            report.id,
+            EmergencyStatus.RESOLVED,
+        )
+
+    assert workflow.get_report(report.id).status == (
+        EmergencyStatus.REPORTED
+    )
+
+
+def test_workflow_rejects_status_change_for_missing_report(tmp_path):
+    workflow = make_workflow(tmp_path)
+
+    with pytest.raises(KeyError, match="Report not found"):
+        workflow.transition_status(
+            "UNKNOWN-REPORT",
+            EmergencyStatus.UNDER_REVIEW,
+        )
