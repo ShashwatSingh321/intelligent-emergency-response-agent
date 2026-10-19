@@ -36,3 +36,7 @@ Thumbs.db
 
 # Generated emergency reports
 data/emergency_reports.json
+
+
+# Runtime-generated emergency status history
+data/status_history.json
