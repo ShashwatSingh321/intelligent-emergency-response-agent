@@ -1,0 +1,21 @@
+
+{
+  "locations": [
+    {"id": "MAIN_GATE", "name": "Main Gate"},
+    {"id": "LIBRARY", "name": "Central Library"},
+    {"id": "HOSTEL", "name": "Student Hostel"},
+    {"id": "AUDITORIUM", "name": "Auditorium"},
+    {"id": "MEDICAL_CENTER", "name": "Medical Center"},
+    {"id": "SPORTS_GROUND", "name": "Sports Ground"}
+  ],
+  "connections": [
+    {"source": "MAIN_GATE", "destination": "LIBRARY", "weight": 2.0},
+    {"source": "MAIN_GATE", "destination": "HOSTEL", "weight": 4.0},
+    {"source": "LIBRARY", "destination": "HOSTEL", "weight": 2.0},
+    {"source": "LIBRARY", "destination": "AUDITORIUM", "weight": 1.5},
+    {"source": "AUDITORIUM", "destination": "SPORTS_GROUND", "weight": 2.0},
+    {"source": "HOSTEL", "destination": "MEDICAL_CENTER", "weight": 1.0},
+    {"source": "MEDICAL_CENTER", "destination": "SPORTS_GROUND", "weight": 3.0},
+    {"source": "AUDITORIUM", "destination": "MEDICAL_CENTER", "weight": 2.5}
+  ]
+}

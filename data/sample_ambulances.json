@@ -1,0 +1,26 @@
+
+{
+  "ambulances": [
+    {
+      "id": "AMB-01",
+      "current_location_id": "MAIN_GATE",
+      "status": "available",
+      "equipment": ["first_aid", "oxygen"],
+      "capacity": 2
+    },
+    {
+      "id": "AMB-02",
+      "current_location_id": "MEDICAL_CENTER",
+      "status": "available",
+      "equipment": ["first_aid", "oxygen", "stretcher"],
+      "capacity": 4
+    },
+    {
+      "id": "AMB-03",
+      "current_location_id": "HOSTEL",
+      "status": "busy",
+      "equipment": ["first_aid", "oxygen"],
+      "capacity": 2
+    }
+  ]
+}
