@@ -7,6 +7,10 @@ from uuid import uuid4
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
+from emergency_response.ai.report_parser import (
+    EmergencyReportParser,
+    ParsedEmergencyReport,
+)
 from emergency_response.database.emergency_repository import (
     EmergencyRepository,
 )
@@ -30,7 +34,7 @@ app = FastAPI(
         "API for emergency reporting, priority evaluation, "
         "ambulance recommendations, routing, and status tracking."
     ),
-    version="0.2.0",
+    version="0.3.0",
 )
 
 
@@ -59,12 +63,30 @@ class EmergencyCreateRequest(BaseModel):
     people_affected: int = Field(default=1, ge=1)
 
 
+class EmergencyParseRequest(BaseModel):
+    """Validate a natural-language emergency report."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: Annotated[
+        str,
+        StringConstraints(
+            min_length=3,
+            max_length=2000,
+            strip_whitespace=True,
+        ),
+    ]
+
+
 class StatusUpdateRequest(BaseModel):
     """Validate requested emergency status transitions."""
 
     model_config = ConfigDict(extra="forbid")
 
     status: EmergencyStatus
+
+
+report_parser = EmergencyReportParser()
 
 
 @lru_cache(maxsize=1)
@@ -94,6 +116,20 @@ def health_check() -> dict[str, str]:
     """Check that the API process is responding."""
 
     return {"status": "ok"}
+
+
+@app.post(
+    "/emergencies/parse",
+    response_model=ParsedEmergencyReport,
+    tags=["Emergencies"],
+    summary="Parse a natural-language emergency report",
+)
+def parse_emergency_report(
+    request: EmergencyParseRequest,
+) -> ParsedEmergencyReport:
+    """Extract report details without creating or dispatching an emergency."""
+
+    return report_parser.parse(request.text)
 
 
 @app.post(

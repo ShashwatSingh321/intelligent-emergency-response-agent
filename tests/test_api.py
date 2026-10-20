@@ -65,6 +65,7 @@ def test_api_documentation_is_available(isolated_workflow):
 
     assert response.status_code == 200
     assert "/emergencies" in response.json()["paths"]
+    assert "/emergencies/parse" in response.json()["paths"]
 
 
 def test_list_emergencies(isolated_workflow):
@@ -162,7 +163,6 @@ def test_status_transition_is_recorded_in_history(
     assert history[0].new_status == EmergencyStatus.UNDER_REVIEW
 
 
-
 def test_whitespace_only_description_is_rejected(isolated_workflow):
     response = client.post(
         "/emergencies",
@@ -201,6 +201,46 @@ def test_unexpected_request_field_is_rejected(isolated_workflow):
             "emergency_type": "medical",
             "location_id": "MAIN_GATE",
             "unexpected_field": "not allowed",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_parse_emergency_report(isolated_workflow):
+    response = client.post(
+        "/emergencies/parse",
+        json={
+            "text": (
+                "There has been a bike accident near the main gate. "
+                "Two people are injured."
+            )
+        },
+    )
+
+    assert response.status_code == 200
+
+    result = response.json()
+    assert result["emergency_type"] == "accident"
+    assert result["people_affected"] == 2
+    assert result["location_hint"] == "the main gate"
+
+
+def test_parse_emergency_rejects_whitespace(isolated_workflow):
+    response = client.post(
+        "/emergencies/parse",
+        json={"text": "   "},
+    )
+
+    assert response.status_code == 422
+
+
+def test_parse_emergency_rejects_extra_fields(isolated_workflow):
+    response = client.post(
+        "/emergencies/parse",
+        json={
+            "text": "Fire near the main gate.",
+            "unexpected": True,
         },
     )
 
