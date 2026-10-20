@@ -34,7 +34,7 @@ app = FastAPI(
         "API for emergency reporting, priority evaluation, "
         "ambulance recommendations, routing, and status tracking."
     ),
-    version="0.3.0",
+    version="0.4.0",
 )
 
 
@@ -89,6 +89,64 @@ class StatusUpdateRequest(BaseModel):
 report_parser = EmergencyReportParser()
 
 
+LOCATION_ALIASES = {
+    "MAIN_GATE": (
+        "main gate",
+        "main entrance",
+        "मुख्य द्वार",
+        "मुख्य गेट",
+    ),
+    "LIBRARY": (
+        "central library",
+        "library",
+        "पुस्तकालय",
+        "लाइब्रेरी",
+    ),
+    "HOSTEL": (
+        "student hostel",
+        "hostel",
+        "छात्रावास",
+        "हॉस्टल",
+    ),
+    "AUDITORIUM": (
+        "auditorium",
+        "ऑडिटोरियम",
+    ),
+    "MEDICAL_CENTER": (
+        "medical center",
+        "medical centre",
+        "health center",
+        "health centre",
+        "मेडिकल सेंटर",
+    ),
+    "SPORTS_GROUND": (
+        "sports ground",
+        "sports field",
+        "खेल का मैदान",
+    ),
+}
+
+
+def resolve_location(location_hint: str | None) -> str | None:
+    """Resolve a location clue to exactly one known campus location."""
+
+    if not location_hint:
+        return None
+
+    hint = " ".join(location_hint.casefold().split())
+
+    matches = {
+        location_id
+        for location_id, aliases in LOCATION_ALIASES.items()
+        if any(alias.casefold() in hint for alias in aliases)
+    }
+
+    if len(matches) != 1:
+        return None
+
+    return matches.pop()
+
+
 @lru_cache(maxsize=1)
 def get_workflow() -> EmergencyWorkflow:
     """Create the workflow once and reuse it across API requests."""
@@ -111,6 +169,58 @@ def get_workflow() -> EmergencyWorkflow:
     )
 
 
+def _submit_emergency(
+    description: str,
+    emergency_type: EmergencyType,
+    location_id: str,
+    people_affected: int,
+) -> dict:
+    """Create and submit a report through the existing workflow."""
+
+    report = EmergencyReport(
+        id=f"ER-{uuid4().hex[:12].upper()}",
+        description=description,
+        emergency_type=emergency_type,
+        location_id=location_id,
+        people_affected=people_affected,
+    )
+
+    try:
+        result = get_workflow().submit_report(
+            report=report,
+            required_equipment={"first_aid"},
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        ) from error
+
+    ambulance = result.ambulance
+
+    return {
+        "report_id": result.report_id,
+        "description": report.description,
+        "emergency_type": report.emergency_type.value,
+        "location_id": report.location_id,
+        "people_affected": report.people_affected,
+        "status": report.status.value,
+        "priority": result.priority,
+        "priority_explanation": result.priority_explanation,
+        "ambulance": (
+            {
+                "id": ambulance.id,
+                "starting_location": ambulance.current_location_id,
+            }
+            if ambulance is not None
+            else None
+        ),
+        "route": result.route,
+        "route_cost": result.route_cost,
+        "recommendation": result.recommendation,
+    }
+
+
 @app.get("/health", tags=["Health"])
 def health_check() -> dict[str, str]:
     """Check that the API process is responding."""
@@ -127,7 +237,7 @@ def health_check() -> dict[str, str]:
 def parse_emergency_report(
     request: EmergencyParseRequest,
 ) -> ParsedEmergencyReport:
-    """Extract report details without creating or dispatching an emergency."""
+    """Extract report details without creating an emergency."""
 
     return report_parser.parse(request.text)
 
@@ -140,50 +250,53 @@ def parse_emergency_report(
 def create_emergency(
     request: EmergencyCreateRequest,
 ) -> dict:
-    """Save and process an emergency report."""
+    """Save and process a structured emergency report."""
 
-    report = EmergencyReport(
-        id=f"ER-{uuid4().hex[:12].upper()}",
+    return _submit_emergency(
         description=request.description,
         emergency_type=request.emergency_type,
         location_id=request.location_id,
         people_affected=request.people_affected,
     )
 
+
+@app.post(
+    "/emergencies/from-text",
+    status_code=status.HTTP_201_CREATED,
+    tags=["Emergencies"],
+    summary="Create an emergency from natural language",
+)
+def create_emergency_from_text(
+    request: EmergencyParseRequest,
+) -> dict:
+    """Parse a report, resolve its location, and submit it."""
+
     try:
-        result = get_workflow().submit_report(
-            report=report,
-            required_equipment={"first_aid"},
-        )
+        parsed = report_parser.parse(request.text)
     except ValueError as error:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(error),
         ) from error
 
-    ambulance = result.ambulance
+    location_id = resolve_location(parsed.location_hint)
 
-    ambulance_details = None
-    if ambulance is not None:
-        ambulance_details = {
-            "id": ambulance.id,
-            "starting_location": ambulance.current_location_id,
-        }
+    if location_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "Could not identify exactly one known campus location. "
+                "Mention Main Gate, Library, Hostel, Auditorium, "
+                "Medical Center, or Sports Ground."
+            ),
+        )
 
-    return {
-        "report_id": result.report_id,
-        "description": report.description,
-        "emergency_type": report.emergency_type.value,
-        "location_id": report.location_id,
-        "people_affected": report.people_affected,
-        "status": report.status.value,
-        "priority": result.priority,
-        "priority_explanation": result.priority_explanation,
-        "ambulance": ambulance_details,
-        "route": result.route,
-        "route_cost": result.route_cost,
-        "recommendation": result.recommendation,
-    }
+    return _submit_emergency(
+        description=parsed.description,
+        emergency_type=parsed.emergency_type,
+        location_id=location_id,
+        people_affected=parsed.people_affected,
+    )
 
 
 @app.get("/emergencies", tags=["Emergencies"])
