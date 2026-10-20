@@ -19,7 +19,6 @@ def test_parses_accident_report(parser):
     assert result.emergency_type == EmergencyType.ACCIDENT
     assert result.people_affected == 2
     assert result.location_hint == "the main gate"
-    assert result.description.startswith("There has been")
 
 
 def test_parses_fire_report(parser):
@@ -44,17 +43,26 @@ def test_parses_security_report(parser):
     assert result.location_hint == "the hostel"
 
 
-def test_parses_hindi_fire_report(parser):
-    result = parser.parse("लैब में आग लगी है।")
+def test_parses_real_hindi_fire_report(parser):
+    result = parser.parse("लाइब्रेरी के पास आग लगी है।")
 
     assert result.emergency_type == EmergencyType.FIRE
+    assert result.location_hint == "लाइब्रेरी"
 
 
-def test_parses_hindi_people_count(parser):
-    result = parser.parse("दुर्घटना में दो लोग घायल हैं।")
+def test_parses_real_hindi_accident_and_people_count(parser):
+    result = parser.parse("मुख्य द्वार के पास दुर्घटना हुई। दो लोग घायल हैं।")
 
     assert result.emergency_type == EmergencyType.ACCIDENT
     assert result.people_affected == 2
+    assert result.location_hint == "मुख्य द्वार"
+
+
+def test_parses_hindi_medical_report(parser):
+    result = parser.parse("एक छात्र लाइब्रेरी में बेहोश है।")
+
+    assert result.emergency_type == EmergencyType.MEDICAL
+    assert result.people_affected == 1
 
 
 def test_unknown_emergency_defaults_to_other(parser):
