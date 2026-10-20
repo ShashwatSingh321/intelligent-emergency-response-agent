@@ -158,3 +158,67 @@ def test_workflow_rejects_status_change_for_missing_report(tmp_path):
             "UNKNOWN-REPORT",
             EmergencyStatus.UNDER_REVIEW,
         )
+
+
+
+
+def test_workflow_returns_route_and_cost_for_recommended_ambulance(tmp_path):
+    workflow = make_workflow(tmp_path)
+
+    result = workflow.submit_report(
+        make_report(),
+        required_equipment={"first_aid"},
+    )
+
+    assert result.ambulance is not None
+    assert result.route == ["MAIN_GATE", "LIBRARY"]
+    assert result.route_cost == 2
+    assert result.ambulance_found is True
+    assert result.route_found is True
+
+
+def test_workflow_handles_no_suitable_ambulance(tmp_path):
+    workflow = make_workflow(tmp_path)
+
+    workflow.ambulances = []
+
+    result = workflow.submit_report(
+        make_report(),
+        required_equipment={"first_aid"},
+    )
+
+    assert result.ambulance is None
+    assert result.route == []
+    assert result.route_found is False
+    assert "human review" in result.recommendation.lower()
+
+
+def test_workflow_rejects_ambulance_without_required_equipment(tmp_path):
+    workflow = make_workflow(tmp_path)
+
+    workflow.ambulances[0].equipment = set()
+
+    result = workflow.submit_report(
+        make_report(),
+        required_equipment={"first_aid"},
+    )
+
+    assert result.ambulance is None
+    assert result.route == []
+    assert result.route_found is False
+
+
+def test_recommendation_does_not_dispatch_ambulance(tmp_path):
+    workflow = make_workflow(tmp_path)
+    ambulance = workflow.ambulances[0]
+
+    result = workflow.submit_report(
+        make_report(),
+        required_equipment={"first_aid"},
+    )
+
+    assert result.ambulance is ambulance
+    assert ambulance.status == AmbulanceStatus.AVAILABLE
+    assert workflow.get_report("ER-WORKFLOW-001").status == (
+        EmergencyStatus.REPORTED
+    )
