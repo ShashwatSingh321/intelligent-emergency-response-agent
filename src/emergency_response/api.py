@@ -1,4 +1,3 @@
-
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
@@ -11,12 +10,14 @@ from emergency_response.ai.report_parser import (
     EmergencyReportParser,
     ParsedEmergencyReport,
 )
+from emergency_response.database.campus_repository import (
+    CampusKnowledgeRepository,
+)
 from emergency_response.database.emergency_repository import (
     EmergencyRepository,
 )
 from emergency_response.database.repository import (
     load_ambulances,
-    load_campus_graph,
 )
 from emergency_response.models.emergency import (
     EmergencyReport,
@@ -89,62 +90,21 @@ class StatusUpdateRequest(BaseModel):
 report_parser = EmergencyReportParser()
 
 
-LOCATION_ALIASES = {
-    "MAIN_GATE": (
-        "main gate",
-        "main entrance",
-        "मुख्य द्वार",
-        "मुख्य गेट",
-    ),
-    "LIBRARY": (
-        "central library",
-        "library",
-        "पुस्तकालय",
-        "लाइब्रेरी",
-    ),
-    "HOSTEL": (
-        "student hostel",
-        "hostel",
-        "छात्रावास",
-        "हॉस्टल",
-    ),
-    "AUDITORIUM": (
-        "auditorium",
-        "ऑडिटोरियम",
-    ),
-    "MEDICAL_CENTER": (
-        "medical center",
-        "medical centre",
-        "health center",
-        "health centre",
-        "मेडिकल सेंटर",
-    ),
-    "SPORTS_GROUND": (
-        "sports ground",
-        "sports field",
-        "खेल का मैदान",
-    ),
-}
+@lru_cache(maxsize=1)
+def get_campus_repository() -> CampusKnowledgeRepository:
+    project_root = Path(__file__).resolve().parents[2]
+    data_dir = project_root / "data"
+    repository = CampusKnowledgeRepository(
+        data_dir / "campus.db"
+    )
+    repository.import_campus_map(
+        data_dir / "campus_map.json"
+    )
+    return repository
 
 
 def resolve_location(location_hint: str | None) -> str | None:
-    """Resolve a location clue to exactly one known campus location."""
-
-    if not location_hint:
-        return None
-
-    hint = " ".join(location_hint.casefold().split())
-
-    matches = {
-        location_id
-        for location_id, aliases in LOCATION_ALIASES.items()
-        if any(alias.casefold() in hint for alias in aliases)
-    }
-
-    if len(matches) != 1:
-        return None
-
-    return matches.pop()
+    return get_campus_repository().resolve_location(location_hint)
 
 
 @lru_cache(maxsize=1)
@@ -154,7 +114,7 @@ def get_workflow() -> EmergencyWorkflow:
     project_root = Path(__file__).resolve().parents[2]
     data_dir = project_root / "data"
 
-    graph = load_campus_graph(data_dir / "campus_map.json")
+    graph = get_campus_repository().load_graph()
     ambulances = load_ambulances(
         data_dir / "sample_ambulances.json"
     )
