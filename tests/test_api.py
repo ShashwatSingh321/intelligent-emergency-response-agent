@@ -1,4 +1,3 @@
-
 from pathlib import Path
 
 import pytest
@@ -66,6 +65,7 @@ def test_api_documentation_is_available(isolated_workflow):
     assert response.status_code == 200
     assert "/emergencies" in response.json()["paths"]
     assert "/emergencies/parse" in response.json()["paths"]
+    assert "/emergencies/from-text" in response.json()["paths"]
 
 
 def test_list_emergencies(isolated_workflow):
@@ -242,6 +242,85 @@ def test_parse_emergency_rejects_extra_fields(isolated_workflow):
             "text": "Fire near the main gate.",
             "unexpected": True,
         },
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_emergency_from_text_successfully(isolated_workflow):
+    response = client.post(
+        "/emergencies/from-text",
+        json={
+            "text": (
+                "There has been a bike accident near the main gate. "
+                "Two people are injured."
+            )
+        },
+    )
+
+    assert response.status_code == 201
+
+    data = response.json()
+    assert data["report_id"].startswith("ER-")
+    assert data["description"] == (
+        "There has been a bike accident near the main gate. "
+        "Two people are injured."
+    )
+    assert data["emergency_type"] == "accident"
+    assert data["location_id"] == "MAIN_GATE"
+    assert data["people_affected"] == 2
+    assert data["status"] == "reported"
+    assert 1 <= data["priority"] <= 5
+
+    # Verify the report appears in the list endpoint.
+    list_response = client.get("/emergencies")
+    assert list_response.status_code == 200
+
+    saved_reports = list_response.json()
+    assert len(saved_reports) == 1
+    assert saved_reports[0]["id"] == data["report_id"]
+
+
+def test_create_emergency_from_text_rejects_unknown_location(
+    isolated_workflow,
+):
+    response = client.post(
+        "/emergencies/from-text",
+        json={
+            "text": (
+                "There has been an accident at an unknown place. "
+                "Two people are injured."
+            )
+        },
+    )
+
+    assert response.status_code == 422
+    assert client.get("/emergencies").json() == []
+
+
+def test_create_emergency_from_text_rejects_ambiguous_location(
+    isolated_workflow,
+):
+    response = client.post(
+        "/emergencies/from-text",
+        json={
+            "text": (
+                "An accident happened between the main gate "
+                "and the library. Two people are injured."
+            )
+        },
+    )
+
+    assert response.status_code == 422
+    assert client.get("/emergencies").json() == []
+
+
+def test_create_emergency_from_text_rejects_whitespace(
+    isolated_workflow,
+):
+    response = client.post(
+        "/emergencies/from-text",
+        json={"text": "   "},
     )
 
     assert response.status_code == 422
