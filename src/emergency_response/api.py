@@ -1,10 +1,11 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Annotated
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from emergency_response.database.emergency_repository import (
     EmergencyRepository,
@@ -29,21 +30,39 @@ app = FastAPI(
         "API for emergency reporting, priority evaluation, "
         "ambulance recommendations, routing, and status tracking."
     ),
-    version="0.1.0",
+    version="0.2.0",
 )
 
 
 class EmergencyCreateRequest(BaseModel):
-    """Fields accepted when submitting a new emergency."""
+    """Validate fields accepted when submitting an emergency."""
 
-    description: str = Field(min_length=3, max_length=2000)
+    model_config = ConfigDict(extra="forbid")
+
+    description: Annotated[
+        str,
+        StringConstraints(
+            min_length=3,
+            max_length=2000,
+            strip_whitespace=True,
+        ),
+    ]
     emergency_type: EmergencyType = EmergencyType.OTHER
-    location_id: str = Field(min_length=1)
+    location_id: Annotated[
+        str,
+        StringConstraints(
+            min_length=1,
+            max_length=100,
+            strip_whitespace=True,
+        ),
+    ]
     people_affected: int = Field(default=1, ge=1)
 
 
 class StatusUpdateRequest(BaseModel):
-    """Requested emergency status transition."""
+    """Validate requested emergency status transitions."""
+
+    model_config = ConfigDict(extra="forbid")
 
     status: EmergencyStatus
 

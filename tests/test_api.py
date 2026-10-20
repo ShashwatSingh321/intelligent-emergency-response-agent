@@ -160,3 +160,48 @@ def test_status_transition_is_recorded_in_history(
     assert history[0].report_id == report_id
     assert history[0].previous_status == EmergencyStatus.REPORTED
     assert history[0].new_status == EmergencyStatus.UNDER_REVIEW
+
+
+
+def test_whitespace_only_description_is_rejected(isolated_workflow):
+    response = client.post(
+        "/emergencies",
+        json={
+            "description": "   ",
+            "emergency_type": "medical",
+            "location_id": "MAIN_GATE",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_description_and_location_are_trimmed(isolated_workflow):
+    response = client.post(
+        "/emergencies",
+        json={
+            "description": "  A student needs medical assistance  ",
+            "emergency_type": "medical",
+            "location_id": " MAIN_GATE ",
+        },
+    )
+
+    assert response.status_code == 201
+
+    data = response.json()
+    assert data["description"] == "A student needs medical assistance"
+    assert data["location_id"] == "MAIN_GATE"
+
+
+def test_unexpected_request_field_is_rejected(isolated_workflow):
+    response = client.post(
+        "/emergencies",
+        json={
+            "description": "A student needs medical assistance",
+            "emergency_type": "medical",
+            "location_id": "MAIN_GATE",
+            "unexpected_field": "not allowed",
+        },
+    )
+
+    assert response.status_code == 422
