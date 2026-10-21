@@ -1,4 +1,3 @@
-
 import json
 import sqlite3
 from pathlib import Path
@@ -25,11 +24,11 @@ DEFAULT_ALIASES = {
     "MEDICAL_CENTER": [
         "medical center", "medical centre",
         "health center", "health centre",
-        "मेडिकल सेंटर",
+        "चिकित्सा केंद्र", "मेडिकल सेंटर",
     ],
     "SPORTS_GROUND": [
         "sports ground", "sports field",
-        "खेल का मैदान",
+        "खेल का मैदान", "स्पोर्ट्स ग्राउंड",
     ],
 }
 
@@ -249,6 +248,126 @@ class CampusKnowledgeRepository:
         with self._connect() as connection:
             rows = connection.execute(
                 "SELECT id, name FROM locations ORDER BY name"
+            ).fetchall()
+
+        return [dict(row) for row in rows]
+
+    def add_facility(
+        self,
+        location_id: str,
+        name: str,
+        details: str = "",
+    ) -> dict:
+        """Add a facility to an existing campus location."""
+
+        location_id = location_id.strip().upper()
+        name = name.strip()
+        details = details.strip()
+
+        if not location_id:
+            raise ValueError("Location ID is required.")
+
+        if not name:
+            raise ValueError("Facility name is required.")
+
+        with self._connect() as connection:
+            location = connection.execute(
+                "SELECT id FROM locations WHERE id = ?",
+                (location_id,),
+            ).fetchone()
+
+            if location is None:
+                raise ValueError(
+                    f"Unknown campus location: {location_id}"
+                )
+
+            cursor = connection.execute(
+                """
+                INSERT INTO facilities(location_id, name, details)
+                VALUES (?, ?, ?)
+                """,
+                (location_id, name, details),
+            )
+
+            facility_id = cursor.lastrowid
+
+            row = connection.execute(
+                """
+                SELECT id, location_id, name, details
+                FROM facilities
+                WHERE id = ?
+                """,
+                (facility_id,),
+            ).fetchone()
+
+        return dict(row)
+
+    def list_facilities(
+        self,
+        location_id: str | None = None,
+    ) -> list[dict]:
+        """List facilities, optionally filtered by campus location."""
+
+        with self._connect() as connection:
+            if location_id:
+                rows = connection.execute(
+                    """
+                    SELECT
+                        f.id,
+                        f.location_id,
+                        l.name AS location_name,
+                        f.name,
+                        f.details
+                    FROM facilities AS f
+                    JOIN locations AS l ON l.id = f.location_id
+                    WHERE f.location_id = ?
+                    ORDER BY f.name
+                    """,
+                    (location_id.strip().upper(),),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT
+                        f.id,
+                        f.location_id,
+                        l.name AS location_name,
+                        f.name,
+                        f.details
+                    FROM facilities AS f
+                    JOIN locations AS l ON l.id = f.location_id
+                    ORDER BY l.name, f.name
+                    """
+                ).fetchall()
+
+        return [dict(row) for row in rows]
+
+    def search_facilities(self, query: str) -> list[dict]:
+        """Search facility names and details using a case-insensitive match."""
+
+        query = query.strip()
+
+        if not query:
+            return []
+
+        pattern = f"%{query}%"
+
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    f.id,
+                    f.location_id,
+                    l.name AS location_name,
+                    f.name,
+                    f.details
+                FROM facilities AS f
+                JOIN locations AS l ON l.id = f.location_id
+                WHERE f.name LIKE ? COLLATE NOCASE
+                   OR f.details LIKE ? COLLATE NOCASE
+                ORDER BY l.name, f.name
+                """,
+                (pattern, pattern),
             ).fetchall()
 
         return [dict(row) for row in rows]

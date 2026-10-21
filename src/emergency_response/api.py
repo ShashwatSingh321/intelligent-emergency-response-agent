@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from emergency_response.ai.report_parser import (
@@ -85,6 +85,38 @@ class StatusUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     status: EmergencyStatus
+
+
+class FacilityCreateRequest(BaseModel):
+    """Validate a new campus facility."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    location_id: Annotated[
+        str,
+        StringConstraints(
+            min_length=1,
+            max_length=100,
+            strip_whitespace=True,
+        ),
+    ]
+
+    name: Annotated[
+        str,
+        StringConstraints(
+            min_length=1,
+            max_length=150,
+            strip_whitespace=True,
+        ),
+    ]
+
+    details: Annotated[
+        str,
+        StringConstraints(
+            max_length=1000,
+            strip_whitespace=True,
+        ),
+    ] = ""
 
 
 report_parser = EmergencyReportParser()
@@ -179,6 +211,68 @@ def _submit_emergency(
         "route_cost": result.route_cost,
         "recommendation": result.recommendation,
     }
+
+
+@app.get("/campus/locations", tags=["Campus"])
+def list_campus_locations() -> list[dict]:
+    """List all known campus locations."""
+
+    return get_campus_repository().list_locations()
+
+
+@app.get("/campus/facilities", tags=["Campus"])
+def list_campus_facilities(
+    location_id: str | None = None,
+) -> list[dict]:
+    """List facilities, optionally filtered by location ID."""
+
+    repository = get_campus_repository()
+
+    if location_id:
+        known_ids = {
+            location["id"]
+            for location in repository.list_locations()
+        }
+
+        if location_id.strip().upper() not in known_ids:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Campus location not found: {location_id}",
+            )
+
+    return repository.list_facilities(location_id)
+
+
+@app.get("/campus/facilities/search", tags=["Campus"])
+def search_campus_facilities(
+    q: str = Query(min_length=1, max_length=100),
+) -> list[dict]:
+    """Search campus facility names and details."""
+
+    return get_campus_repository().search_facilities(q)
+
+
+@app.post(
+    "/campus/facilities",
+    status_code=status.HTTP_201_CREATED,
+    tags=["Campus"],
+)
+def create_campus_facility(
+    request: FacilityCreateRequest,
+) -> dict:
+    """Add a facility to an existing campus location."""
+
+    try:
+        return get_campus_repository().add_facility(
+            location_id=request.location_id,
+            name=request.name,
+            details=request.details,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        ) from error
 
 
 @app.get("/health", tags=["Health"])
