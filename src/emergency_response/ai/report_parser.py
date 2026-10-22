@@ -18,48 +18,120 @@ class ParsedEmergencyReport(BaseModel):
 
 
 class EmergencyReportParser:
-    """Rule-based emergency parser for English and Hindi reports."""
+    """Rule-based parser for English, Hindi, and Hinglish reports."""
 
     TYPE_KEYWORDS = {
         EmergencyType.FIRE: (
-            "fire", "burning", "smoke",
-            "आग", "आग लगी", "जल रहा", "जल रही", "धुआँ", "धुआं",
+            "fire", "burning", "smoke", "flames",
+            "aag", "aag lagi", "aag lag gayi", "aag lagyi",
+            "dhua", "dhuan", "dhuaan", "आग", "आग लगी",
+            "धुआं", "धुआँ",
         ),
         EmergencyType.ACCIDENT: (
             "accident", "crash", "collision", "road accident",
-            "दुर्घटना", "एक्सीडेंट", "टक्कर", "सड़क हादसा",
-        ),
-        EmergencyType.MEDICAL: (
-            "medical", "injured", "injury", "unconscious",
-            "bleeding", "heart attack", "sick",
-            "घायल", "बेहोश", "खून बह", "दिल का दौरा",
-            "तबीयत", "बीमार", "चोट",
+            "takra", "takra gaya", "gaadi takra", "car crash",
+            "दुर्घटना", "टक्कर", "एक्सीडेंट",
         ),
         EmergencyType.SECURITY: (
             "theft", "robbery", "fight", "violence", "intruder",
-            "suspicious person",
-            "चोरी", "लूट", "लड़ाई", "मारपीट", "हिंसा",
-            "संदिग्ध व्यक्ति",
+            "suspicious person", "chori", "chor", "loot",
+            "maar-peet", "marpeet", "ladayi", "ladai",
+            "झगड़ा", "चोरी", "लड़ाई", "मारपीट", "लूट",
+        ),
+        EmergencyType.MEDICAL: (
+            "medical emergency", "medical", "injured", "injury",
+            "unconscious", "unresponsive", "bleeding", "heart attack",
+            "sick", "hurt", "wound", "ambulance",
+            "chot", "chot lagi", "chot lagyi", "chot lag gayi",
+            "ghayal", "behosh", "behush", "khoon beh",
+            "saans nahi", "tabiyat kharab", "dard",
+            "चोट", "घायल", "बेहोश", "खून", "दिल का दौरा",
         ),
     }
 
     NUMBER_WORDS = {
         "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
         "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
-        "एक": 1, "दो": 2, "तीन": 3, "चार": 4, "पाँच": 5,
-        "पांच": 5, "छह": 6, "सात": 7, "आठ": 8, "नौ": 9,
-        "दस": 10,
+        "ek": 1, "aik": 1, "do": 2, "teen": 3, "tin": 3,
+        "char": 4, "chaar": 4, "paanch": 5, "panch": 5,
+        "cheh": 6, "chhe": 6, "saat": 7, "aath": 8,
+        "nau": 9, "das": 10,
+        "एक": 1, "दो": 2, "तीन": 3, "चार": 4, "पांच": 5,
+        "पाँच": 5, "छह": 6, "छः": 6, "सात": 7,
+        "आठ": 8, "नौ": 9, "दस": 10,
     }
 
+    # Known campus names and aliases. Longer names are checked first.
+    LOCATION_ALIASES = (
+        "vishveshvaraya building",
+        "vishveshwarya building",
+        "vishveshvaraya",
+        "vishveshwarya",
+        "vishwakarma building",
+        "vivekananda building",
+        "chanakya building",
+        "central library",
+        "medical center",
+        "medical centre",
+        "health center",
+        "health centre",
+        "playground behind boys hostel",
+        "second parking area",
+        "first parking area",
+        "girls hostel",
+        "girl hostel",
+        "boys hostel",
+        "boys playground",
+        "vedanta building",
+        "musing building",
+        "auditorium",
+        "central garden",
+        "central lawn",
+        "sports ground",
+        "sports field",
+        "student hostel",
+        "main entrance",
+        "main gate",
+        "first parking",
+        "second parking",
+        "playground",
+        "library",
+        "vedanta",
+        "musing",
+        "chanakya",
+        "vivekananda",
+        "vishwakarma",
+        "garden",
+        "lawn",
+        "hostel",
+        "gate",
+        "मेडिकल सेंटर",
+        "चिकित्सा केंद्र",
+        "मुख्य द्वार",
+        "पुस्तकालय",
+        "खेल का मैदान",
+        "लड़कियों का हॉस्टल",
+        "लड़कों का हॉस्टल",
+        "छात्रावास",
+        "वेदांता",
+        "चाणक्य",
+        "विवेकानंद",
+        "विश्वकर्मा",
+        "गार्डन",
+        "लाइब्रेरी",
+        "हॉस्टल",
+    )
+
     LOCATION_PATTERN = re.compile(
-        r"\b(?:near|at|outside|inside|beside)\s+"
+        r"\b(?:near|at|outside|inside|beside|opposite)\s+"
         r"(.+?)(?=[,.!?;]|$)",
         re.IGNORECASE,
     )
 
-    HINDI_LOCATION_PATTERN = re.compile(
-        r"(?:के पास|के नज़दीक|के नजदीक|बाहर|अंदर|के सामने|में)\s*"
-        r"(.+?)(?=[,.!?;]|$)"
+    HINGLISH_LOCATION_PATTERN = re.compile(
+        r"(.+?)\s+(?:ke paas|ke pass|ke samne|ke saamne|"
+        r"ke peeche|ke andar|mein|me|par)\b",
+        re.IGNORECASE,
     )
 
     def parse(self, text: str) -> ParsedEmergencyReport:
@@ -90,37 +162,45 @@ class EmergencyReportParser:
         )
 
     def _detect_emergency_type(self, text: str) -> EmergencyType:
-        """Identify a category using configured keywords."""
+        """Identify the emergency category from keywords."""
 
-        # Prefer more specific accident clues over general injury clues.
+        # An explicit accident or fire takes precedence over injury symptoms.
         for emergency_type in (
             EmergencyType.FIRE,
             EmergencyType.ACCIDENT,
             EmergencyType.SECURITY,
             EmergencyType.MEDICAL,
         ):
-            if any(
-                keyword.casefold() in text
-                for keyword in self.TYPE_KEYWORDS[emergency_type]
-            ):
-                return emergency_type
+            for keyword in self.TYPE_KEYWORDS[emergency_type]:
+                if keyword.casefold() in text:
+                    return emergency_type
 
         return EmergencyType.OTHER
 
     def _detect_people_count(self, text: str) -> int:
-        """Extract an explicit count of affected people."""
+        """Extract the number of affected people when stated."""
 
-        words = "|".join(
+        number_words = "|".join(
             re.escape(word)
             for word in sorted(self.NUMBER_WORDS, key=len, reverse=True)
         )
-        number = rf"(?:\d+|{words})"
+        number = rf"(?:\d{{1,4}}|{number_words})"
+
+        people_terms = (
+            r"people|persons?|victims?|students?|workers?|"
+            r"children|child|kids?|boys?|girls?|patients?|"
+            r"baache|bacche|bachche|bachcha|bacha|"
+            r"log|aadmi|aurat|vyakti|"
+            r"बच्चे|बच्चों|बच्चा|बच्ची|लोग|व्यक्ति|छात्र|छात्रों"
+        )
 
         patterns = (
-            rf"\b({number})\s+"
-            r"(?:people|persons|person|victims|victim|students|workers)\b",
-            rf"({number})\s*"
-            r"(?:लोग|व्यक्ति|छात्र|छात्रों|घायल)",
+            rf"(?<!\w)({number})\s+"
+            rf"(?:of\s+)?(?:the\s+)?(?:injured\s+|affected\s+)?"
+            rf"(?:{people_terms})(?!\w)",
+            rf"(?<!\w)({number})\s+"
+            rf"(?:injured|affected|hurt)\s+"
+            rf"(?:people|persons?|students?|children|workers?)(?!\w)",
         )
 
         for pattern in patterns:
@@ -136,56 +216,70 @@ class EmergencyReportParser:
                 else self.NUMBER_WORDS[token]
             )
 
-            # Ignore unreasonable values rather than trusting a typo.
             if 1 <= count <= 1000:
                 return count
 
         return 1
 
 
-  
     def _detect_location(self, text: str) -> str | None:
-        """Extract a location clue from English or Hindi text."""
+        """Find a campus location while preserving useful location context."""
 
-        # English: "near the main gate", "at the library"
+        normalized = text.casefold()
+
+        # Preserve the existing API's expected wording for English reports.
         match = self.LOCATION_PATTERN.search(text)
         if match:
-            return match.group(1).strip()
+            return match.group(1).strip(" .,!?:;")
 
-        # Hindi: the location normally comes BEFORE "के पास",
-        # "के सामने", "के नज़दीक", etc.
-        hindi_pattern = re.compile(
-            r"(.+?)\s+(?:के पास|के नज़दीक|के नजदीक|के सामने)"
-            r"(?=\s|[,.!?।]|$)"
-        )
-        match = hindi_pattern.search(text)
+        # Recognize multiple explicitly named locations. Returning the full
+        # phrase lets the repository reject ambiguous location descriptions.
+        location_matches = []
 
-        if match:
-            location = match.group(1).strip()
-
-            # If the sentence begins with a common introductory phrase,
-            # keep the location portion after it.
-            prefixes = (
-                "घटना ",
-                "आपातकाल ",
-                "कृपया ",
+        for alias in self.LOCATION_ALIASES:
+            pattern = (
+                r"(?<!\w)"
+                + re.escape(alias.casefold())
+                + r"(?!\w)"
             )
-            for prefix in prefixes:
-                if location.startswith(prefix):
-                    location = location[len(prefix):].strip()
+            for found in re.finditer(pattern, normalized):
+                location_matches.append((found.start(), found.end(), alias))
 
-            return location or None
+        location_matches.sort(key=lambda item: item[0])
 
-        # Hindi: "लाइब्रेरी में आग लगी है"
-        hindi_in_pattern = re.compile(
-            r"(.+?)\s+में\s+(?="
-            r"आग|दुर्घटना|एक्सीडेंट|हादसा|चोरी|लड़ाई|"
-            r"बेहोश|घायल|धुआँ|धुआं"
-            r")"
-        )
-        match = hindi_in_pattern.search(text)
+        # Deduplicate overlapping aliases such as "gate" and "main gate".
+        distinct_locations = []
+        for start, end, alias in location_matches:
+            if any(
+                start >= old_start and end <= old_end
+                for old_start, old_end, _ in distinct_locations
+            ):
+                continue
 
+            distinct_locations.append((start, end, alias))
+
+        if len(distinct_locations) > 1:
+            first = distinct_locations[0][0]
+            last = distinct_locations[-1][1]
+            return text[first:last].strip(" .,!?:;")
+
+        if distinct_locations:
+            start, end, alias = distinct_locations[0]
+            original_phrase = text[start:end]
+
+            # Keep articles where they occur in the user's report.
+            prefix = text[:start]
+            article = re.search(r"\b(the|a|an)\s+$", prefix, re.IGNORECASE)
+
+            if article:
+                return article.group(0) + original_phrase
+
+            return original_phrase
+
+        # Hinglish fallback: e.g. "Library ke paas accident hua".
+        match = self.HINGLISH_LOCATION_PATTERN.search(text)
         if match:
-            return match.group(1).strip()
+            return match.group(1).strip(" .,!?:;")
 
         return None
+

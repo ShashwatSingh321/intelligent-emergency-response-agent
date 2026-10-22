@@ -5,32 +5,77 @@ from pathlib import Path
 from emergency_response.routing.graph import CampusGraph
 
 
+
 DEFAULT_ALIASES = {
     "MAIN_GATE": [
-        "main gate", "main entrance", "gate",
-        "मुख्य द्वार", "मुख्य गेट",
+        "main gate", "main entrance", "gate", "dit gate",
+        "dit main gate", "मुख्य द्वार", "मेन गेट",
     ],
     "LIBRARY": [
-        "central library", "library",
-        "पुस्तकालय", "लाइब्रेरी",
+        "central library", "library", "पुस्तकालय", "लाइब्रेरी",
     ],
     "HOSTEL": [
-        "student hostel", "hostel",
+        "student hostel", "hostel", "पुराना हॉस्टल",
         "छात्रावास", "हॉस्टल",
     ],
     "AUDITORIUM": [
         "auditorium", "ऑडिटोरियम",
     ],
     "MEDICAL_CENTER": [
-        "medical center", "medical centre",
-        "health center", "health centre",
-        "चिकित्सा केंद्र", "मेडिकल सेंटर",
+        "medical center", "medical centre", "health center",
+        "health centre", "doctor", "medical", "dispensary",
+        "मेडिकल सेंटर", "डॉक्टर", "चिकित्सा केंद्र",
     ],
     "SPORTS_GROUND": [
-        "sports ground", "sports field",
-        "खेल का मैदान", "स्पोर्ट्स ग्राउंड",
+        "sports ground", "sports field", "स्पोर्ट्स ग्राउंड",
+        "खेल का मैदान",
+    ],
+    "FIRST_PARKING": [
+        "first parking", "first parking area", "bus parking",
+        "parking near gate", "पहली पार्किंग",
+    ],
+    "GIRLS_HOSTEL": [
+        "girls hostel", "girl hostel", "girls' hostel",
+        "गर्ल्स हॉस्टल", "लड़कियों का हॉस्टल",
+    ],
+    "VEDANTA": [
+        "vedanta", "vedanta building", "vedanta bhawan",
+        "वेदांता", "वेदान्ता बिल्डिंग",
+    ],
+    "MUSING": [
+        "musing", "musing building", "मसिंग बिल्डिंग",
+    ],
+    "SECOND_PARKING": [
+        "second parking", "second parking area", "दूसरी पार्किंग",
+    ],
+    "CENTRAL_GARDEN": [
+        "central garden", "garden", "lawn", "central lawn",
+        "गार्डन", "लॉन",
+    ],
+    "CHANAKYA": [
+        "chanakya", "chanakya building", "चाणक्य",
+        "चाणक्य बिल्डिंग",
+    ],
+    "VIVEKANANDA": [
+        "vivekananda", "vivekananda building", "विवेकानंद",
+    ],
+    "VISHVESHWARAYA": [
+        "vishveshvaraya", "vishveshwarya",
+        "vishveshvaraya building", "विश्वेश्वरैया",
+    ],
+    "VISHWAKARMA": [
+        "vishwakarma", "vishwakarma building", "विश्वकर्मा",
+    ],
+    "BOYS_HOSTEL": [
+        "boys hostel", "boys' hostel", "बॉयज हॉस्टल",
+        "लड़कों का हॉस्टल",
+    ],
+    "BOYS_PLAYGROUND": [
+        "boys playground", "playground behind boys hostel",
+        "behind boys hostel", "बॉयज प्लेग्राउंड",
     ],
 }
+
 
 
 class CampusKnowledgeRepository:

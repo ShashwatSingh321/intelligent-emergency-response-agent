@@ -1,4 +1,4 @@
-from functools import lru_cache
+﻿from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
 from uuid import uuid4
@@ -9,6 +9,9 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from emergency_response.ai.report_parser import (
     EmergencyReportParser,
     ParsedEmergencyReport,
+)
+from emergency_response.services.ambulance_request_service import (
+    AmbulanceRequestRepository,
 )
 from emergency_response.database.campus_repository import (
     CampusKnowledgeRepository,
@@ -23,6 +26,11 @@ from emergency_response.models.emergency import (
     EmergencyReport,
     EmergencyStatus,
     EmergencyType,
+)
+from emergency_response.models.status_history import StatusHistoryEntry
+from emergency_response.services.email_notifier import (
+    send_ambulance_request_notification,
+    send_emergency_notification,
 )
 from emergency_response.services.emergency_workflow import (
     EmergencyWorkflow,
@@ -119,6 +127,32 @@ class FacilityCreateRequest(BaseModel):
     ] = ""
 
 
+class AmbulanceRequestCreate(BaseModel):
+    """Validate an additional ambulance request."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    location_id: Annotated[
+        str,
+        StringConstraints(
+            min_length=1,
+            max_length=100,
+            strip_whitespace=True,
+        ),
+    ]
+
+    ambulance_count: int = Field(ge=1, le=20)
+
+    reason: Annotated[
+        str,
+        StringConstraints(
+            min_length=3,
+            max_length=1000,
+            strip_whitespace=True,
+        ),
+    ]
+
+
 report_parser = EmergencyReportParser()
 
 
@@ -133,6 +167,14 @@ def get_campus_repository() -> CampusKnowledgeRepository:
         data_dir / "campus_map.json"
     )
     return repository
+
+
+@lru_cache(maxsize=1)
+def get_ambulance_request_repository() -> AmbulanceRequestRepository:
+    project_root = Path(__file__).resolve().parents[2]
+    return AmbulanceRequestRepository(
+        project_root / "data" / "ambulance_requests.json"
+    )
 
 
 def resolve_location(location_hint: str | None) -> str | None:
@@ -190,7 +232,7 @@ def _submit_emergency(
 
     ambulance = result.ambulance
 
-    return {
+    response_data = {
         "report_id": result.report_id,
         "description": report.description,
         "emergency_type": report.emergency_type.value,
@@ -212,12 +254,64 @@ def _submit_emergency(
         "recommendation": result.recommendation,
     }
 
+    email_status = send_emergency_notification(response_data)
+    response_data["email_notification"] = email_status
+    return response_data
+
 
 @app.get("/campus/locations", tags=["Campus"])
 def list_campus_locations() -> list[dict]:
     """List all known campus locations."""
 
     return get_campus_repository().list_locations()
+
+
+@app.get("/ambulance-requests", tags=["Ambulance Requests"])
+def list_ambulance_requests() -> list[dict]:
+    """List previously submitted additional ambulance requests."""
+    return get_ambulance_request_repository().list_requests()
+
+
+@app.post(
+    "/ambulance-requests",
+    status_code=status.HTTP_201_CREATED,
+    tags=["Ambulance Requests"],
+)
+def create_ambulance_request(
+    request: AmbulanceRequestCreate,
+) -> dict:
+    """Save an additional ambulance request and email the configured recipient."""
+    locations = get_campus_repository().list_locations()
+    location = next(
+        (
+            item
+            for item in locations
+            if item["id"] == request.location_id
+        ),
+        None,
+    )
+
+    if location is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Campus location not found: {request.location_id}",
+        )
+
+    repository = get_ambulance_request_repository()
+    record = repository.create_request(
+        location_id=location["id"],
+        location_name=location["name"],
+        ambulance_count=request.ambulance_count,
+        reason=request.reason,
+    )
+
+    notification_status = send_ambulance_request_notification(record)
+    updated = repository.update_notification_status(
+        record["request_id"],
+        notification_status,
+    )
+
+    return updated or {**record, "notification_status": notification_status}
 
 
 @app.get("/campus/facilities", tags=["Campus"])
@@ -373,6 +467,26 @@ def get_emergency(report_id: str) -> EmergencyReport:
         )
 
     return report
+
+
+@app.get(
+    "/emergencies/{report_id}/history",
+    tags=["Emergencies"],
+)
+def get_emergency_status_history(
+    report_id: str,
+) -> list[StatusHistoryEntry]:
+    """Return the recorded status changes for one emergency."""
+
+    workflow = get_workflow()
+
+    if workflow.get_report(report_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Emergency report not found: {report_id}",
+        )
+
+    return workflow.status_service.get_history(report_id)
 
 
 @app.patch(
